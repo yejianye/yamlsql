@@ -5,21 +5,24 @@
 
 import pytest
 
+from yamlsql import logic
 
-from yamlsql import yamlsql
+from fixtures import conn_id
 
+### Test Logic
 
-@pytest.fixture
-def response():
-    """Sample pytest fixture.
+def test_list_tables(conn_id):
+    result = logic.list_tables(conn_id)
+    assert result[0] == {'name': 'public.test_user', 'type': 'table'}
+    assert result[1] == {'name': 'public.test_user_view', 'type': 'view'}
 
-    See more at: http://doc.pytest.org/en/latest/fixture.html
-    """
-    # import requests
-    # return requests.get('https://github.com/audreyr/cookiecutter-pypackage')
+def test_describe_table(conn_id):
+    result = logic.describe_table(conn_id, 'test_user')
+    assert result == [
+        {'field': 'id', 'type': 'integer'},
+        {'field': 'name', 'type': 'text'},
+        {'field': 'email', 'type': 'text'},
+        {'field': 'password', 'type': 'text'},
+        ]
 
-
-def test_content(response):
-    """Sample pytest test function with the pytest fixture as an argument."""
-    # from bs4 import BeautifulSoup
-    # assert 'GitHub' in BeautifulSoup(response.content).title.string
+### Test Emacs
