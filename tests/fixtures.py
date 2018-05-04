@@ -1,7 +1,7 @@
 import pytest
 
-from yamlsql.connection import create_conn
+from yamlsql.logic import DBMeta
 
-@pytest.fixture(scope='session')
-def conn_id():
-    return create_conn("postgresql://ryan@localhost:5432/yamlsql-test")
+@pytest.fixture()
+def db_meta():
+    return DBMeta.create_instance("postgresql://ryan@localhost:5432/yamlsql-test")
