@@ -1,6 +1,6 @@
 import pytest
 
-from yamlsql.logic import DBMeta
+from yamlsql.dbmeta import DBMeta
 
 @pytest.fixture()
 def db_meta():

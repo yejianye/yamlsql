@@ -6,7 +6,6 @@ from sqlalchemy import text, create_engine
 
 from . import errors
 
-
 SQL_FETCH_METADATA = text("""
 select
   table_schema, table_name, column_name, data_type
@@ -18,12 +17,35 @@ order by
  table_schema, table_name, ordinal_position
 """)
 
+SQL_COUNT_DISTINCT = "select count(distinct {field_name}) from {table_name}"
+
+SQL_MOST_COMMON = """
+select {field_name}, count(*) as cnt from {table_name}
+group by 1
+order by 2 desc
+limit {limit}
+"""
+
+SQL_NUMERIC_STATS = """
+select
+  min({field_name}) as min,
+  max({field_name}) as max,
+  avg({field_name}) as avg
+from {table_name}
+"""
+
 
 @decorator
 def require_metadata(func):
     func._args[0].fetch_metadata()
     return func()
 
+
+def is_numeric(field):
+    return field['type'] in (
+        'bigint', 'integer', 'numeric', 'real', 'smallint',
+        'double precision'
+        )
 
 class DBMeta(object):
     _instances = {}
@@ -79,8 +101,43 @@ class DBMeta(object):
         name = self._find_table(name)
         return self._meta[name]['fields']
 
+    @require_metadata
     def describe_field(self, table_name, field_name):
-        pass
+        table_name = self._find_table(table_name)
+        field = [f for f in self._meta[table_name]['fields']
+                 if f['field'] == field_name]
+        if not field:
+            raise errors.FieldNotFound(table_name, field_name)
+
+        field = field[0]
+        # is it categorical field?
+        limit = 20
+        sql_ctx = {
+            'table_name': table_name,
+            'field_name': field_name,
+            'limit': limit
+            }
+        distinct_count = self.conn.execute(
+            SQL_COUNT_DISTINCT.format(**sql_ctx)
+        ).first()[0]
+        most_common = self.conn.execute(SQL_MOST_COMMON.format(**sql_ctx))
+        most_common = [{'value': r[field_name], 'count': r['cnt']}
+                       for r in most_common]
+        result = {
+            'distinct_count': distinct_count,
+            'most_common': most_common
+            }
+
+        if distinct_count > limit and is_numeric(field):
+            stats = self.conn.execute(
+                SQL_NUMERIC_STATS.format(**sql_ctx)
+            ).first()
+            result.update({
+                'min': stats['min'],
+                'max': stats['max'],
+                'avg': stats['avg'],
+                })
+        return result
 
     @classmethod
     def get_instance(cls, conn_id):

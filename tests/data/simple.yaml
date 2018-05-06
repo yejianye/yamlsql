@@ -1,0 +1,8 @@
+- name: query1
+  sql: select * from public.test_user
+
+- name: query2
+  from: public.test_user
+  select:
+    - name
+    - email
