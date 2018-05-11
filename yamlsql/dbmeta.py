@@ -3,6 +3,7 @@ from threading import Lock
 
 from funcy import decorator
 from sqlalchemy import text, create_engine
+from sqlalchemy.exc import ResourceClosedError
 
 from . import errors
 
@@ -47,13 +48,16 @@ def is_numeric(field):
         'double precision'
         )
 
+def build_conn_id(conn_str):
+    return md5(conn_str).hexdigest()
+
 class DBMeta(object):
     _instances = {}
 
     def __init__(self, conn_str, search_path=None):
         self.conn_str = conn_str
         self.search_path = search_path or ['public']
-        self.conn_id = md5(conn_str).hexdigest()
+        self.conn_id = build_conn_id(conn_str)
         self.conn = self.connect()
         self._meta_lock = Lock()
         self._meta = None
@@ -139,12 +143,26 @@ class DBMeta(object):
                 })
         return result
 
+    def run_sql(self, sql, limit=100):
+        rs = self.conn.execute(sql)
+        result = {
+            "rowcount": rs.rowcount
+            }
+        try:
+            result['rows'] = [dict(x) for x in rs.fetchmany(limit)]
+        except ResourceClosedError:
+            pass
+        return result
+
     @classmethod
     def get_instance(cls, conn_id):
         return cls._instances.get(conn_id)
 
     @classmethod
     def create_instance(cls, conn_str, search_path=None):
+        conn_id = build_conn_id(conn_str)
+        if conn_id in cls._instances:
+            return cls._instances[conn_id]
         db_meta = DBMeta(conn_str, search_path)
         cls._instances[db_meta.conn_id] = db_meta
         return db_meta
