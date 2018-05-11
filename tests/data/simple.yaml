@@ -1,8 +1,8 @@
 - name: query1
-  sql: select * from public.test_user
+  sql: select * from public.test_data
 
 - name: query2
-  from: public.test_user
+  from: public.test_data
   select:
-    - name
-    - email
+    - gender
+    - age

@@ -18,12 +18,12 @@ def simple_render():
 
 def test_render_query_name(simple_render):
     sql = simple_render.render(query_name='query1')
-    assert sql == sql_format("select * from public.test_user")
+    assert sql == sql_format("select * from public.test_data")
 
 
 def test_render_lineno(simple_render):
-    sql1 = sql_format("select * from public.test_user")
-    sql2 = sql_format("select name,email from public.test_user")
+    sql1 = sql_format("select * from public.test_data")
+    sql2 = sql_format("select gender,age from public.test_data")
     assert simple_render.render(lineno=1) == sql1
     assert simple_render.render(lineno=5) == sql2
 
@@ -31,5 +31,5 @@ def test_render_lineno(simple_render):
 def test_render(simple_render):
     sql = simple_render.render()
     assert sql == sql_format(
-        "select * from public.test_user;"
-        "select name,email from public.test_user;")
+        "select * from public.test_data;"
+        "select gender,age from public.test_data;")
