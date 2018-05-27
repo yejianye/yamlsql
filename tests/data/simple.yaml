@@ -6,3 +6,4 @@
   select:
     - gender
     - age
+  limit: 10

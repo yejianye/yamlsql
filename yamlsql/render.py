@@ -16,7 +16,8 @@ def _build_clause(name, item):
     key = name.replace(' ', '_')
     if key not in item:
         return ''
-    return '{} {}'.format(name, ','.join(item[key]))
+
+    return '{} {}'.format(name, item[key])
 
 
 class Processor(object):

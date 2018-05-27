@@ -33,3 +33,9 @@ def describe_field(data):
             stats,
             most_common).strip()
         }
+
+def run_sql(data):
+    result = tabulate(data['rows'], headers=data['columns'], tablefmt='simple')
+    return {
+        'text': result
+        }

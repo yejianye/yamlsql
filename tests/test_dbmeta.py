@@ -49,9 +49,9 @@ def test_describe_field(db):
     assert height['distinct_count'] == 1000
 
 def test_run_sql(db):
-    result = db.run_sql("select * from test_data", limit=50)
+    result = db.run_sql("select height, gender from test_data", limit=50)
     rowcount = result['rowcount']
     rows = result['rows']
     assert rowcount == 1000
-    assert len(rows) == 50
-    assert set(rows[0].keys()) == set(['index', 'age', 'gender', 'height'])
+    assert len(result['rows']) == 50
+    assert result['columns'] == ['height', 'gender']

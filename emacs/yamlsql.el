@@ -4,6 +4,32 @@
 (require 'request)
 (setq lexical-binding t)
 
+(define-derived-mode yamlsql-mode yaml-mode "YAML-SQL"
+  "Major mode for YAML-SQL format"
+  :abbrev-table nil :syntax-table nil
+  )
+
+
+;;; Custom Variables
+
+(defconst yamlsql-http-headers
+  '(("Content-Type" . "application/json")
+    ("User-Agent" . "emacs")))
+
+(setq yamlsql-connection-alist
+      '(("localhost"
+         (conn-string . "postgresql://ryan@localhost:5432/yamlsql-test")
+         (search-path . ("public")))))
+
+(setq yamlsql-program "/Users/ryan/source_code/yamlsql/yamlsql/cli.py")
+(setq yamlsql-server-port 15555)
+
+;; Variables that used internally
+(defvar yamlsql-server-process
+  nil
+  "Process object for yamlsql server"
+  )
+
 (defvar yamlsql-conn-id
   nil
   "Connection ID to yamlsql server for current buffer.")
@@ -17,22 +43,8 @@
 (defvar yamlsql--tables-cache
   nil)
 
-(defconst yamlsql-http-headers
-  '(("Content-Type" . "application/json")
-    ("User-Agent" . "emacs")))
-
-(setq yamlsql-connection-alist
-    '(("localhost"
-          (conn-string . "postgresql://ryan@localhost:5432/yamlsql-test")
-          (search-path . ("public")))))
-
-(setq yamlsql-program "/Users/ryan/source_code/yamlsql/yamlsql/cli.py")
-(setq yamlsql-server-port 15555)
-
-(define-derived-mode yamlsql-mode yaml-mode "YAML-SQL"
-  "Major mode for YAML-SQL format"
-  :abbrev-table nil :syntax-table nil
-  )
+
+;; Utility functions
 
 (defun yamlsql--output (text)
   (let ((buffer (get-buffer-create yamlsql-output-buffer)))
@@ -41,12 +53,6 @@
       (insert (format "%s\n\n" text)))
     (pop-to-buffer buffer))
   )
-
-(defun yamlsql-start-server ()
-    (start-process-shell-command "yamlsql-server" "*yamlsql-server*"
-        (format "%s runserver --debug --port %d"
-            yamlsql-program yamlsql-server-port))
-    )
 
 (defun yamlsql--http-success (buffer callback)
   (function* (lambda (&key data &allow-other-keys)
@@ -85,24 +91,6 @@
         )
     )
 
-(defun yamlsql--on-connected (status data)
-  (setq-local yamlsql-conn-id (assoc-default 'conn_id data))
-  (message "Status: %S Connection: %S" status yamlsql-conn-id)
-  (yamlsql--build-tables-cache)
-  )
-
-(defun yamlsql-connect (conn-name)
-  (interactive)
-  (let* ((conn-props (assoc-default conn-name yamlsql-connection-alist))
-         (conn-string (assoc-default 'conn-string conn-props))
-         (search-path (assoc-default 'search-path conn-props)))
-    (yamlsql--http-post "/connect"
-                        `(("conn_string" . ,conn-string)
-                          ("search_path" . ,search-path))
-                        'yamlsql--on-connected)
-    (message "Connecting to %s..." conn-name))
-  )
-
 (defun yamlsql--print-text (status data)
   (yamlsql--output (assoc-default 'text data))
   )
@@ -113,6 +101,54 @@
           body)
   )
 
+(defun yamlsql--find-table ()
+  (let ((initial (eldoc-current-symbol))
+        (completion-ignore-case t))
+    (completing-read "Tables :"
+                     yamlsql--tables-cache
+                     nil t initial))
+  )
+
+(defun yamlsql--find-connections ()
+  (let ((completion-ignore-case t))
+    (completing-read "Connections :"
+                     (mapcar #'(lambda (c) (car c))
+                             yamlsql-connection-alist)
+                     nil t))
+  )
+
+
+;;; Start and Connect Server
+
+(defun yamlsql-start-server ()
+  (unless yamlsql-server-process
+    (setq yamlsql-server-process
+      (start-process-shell-command "yamlsql-server" "*yamlsql-server*"
+                                  (format "%s runserver --debug --port %d"
+                                          yamlsql-program yamlsql-server-port))
+      )
+    )
+  )
+
+(defun yamlsql-connect (conn-name)
+  (interactive (list (yamlsql--find-connections)))
+  (let* ((conn-props (assoc-default conn-name yamlsql-connection-alist))
+         (conn-string (assoc-default 'conn-string conn-props))
+         (search-path (assoc-default 'search-path conn-props)))
+    (yamlsql-start-server)
+    (yamlsql--http-post "/connect"
+                        `(("conn_string" . ,conn-string)
+                          ("search_path" . ,search-path))
+                        'yamlsql--on-connected)
+    (message "Connecting to %s..." conn-name))
+  )
+
+(defun yamlsql--on-connected (status data)
+  (setq-local yamlsql-conn-id (assoc-default 'conn_id data))
+  (message "Status: %S Connection: %S" status yamlsql-conn-id)
+  (yamlsql--build-tables-cache)
+  )
+
 (defun yamlsql--build-tables-cache ()
   (yamlsql--check-conn
    (yamlsql--http-get "/list_tables"
@@ -121,16 +157,12 @@
                         (setq-local yamlsql--tables-cache
                                     (append (assoc-default 'tables data) nil))
                         (message "Tables cache has been updated with %d entries."
-                                (length yamlsql--tables-cache)))))
+                                 (length yamlsql--tables-cache)))))
   )
 
-(defun yamlsql--find-table ()
-  (let ((initial (eldoc-current-symbol))
-        (completion-ignore-case t))
-    (completing-read "Tables :"
-                     yamlsql--tables-cache
-                     nil t initial))
-  )
+
+
+;;; Describe tables and fields
 
 (defun yamlsql-describe-table (table-name)
   (interactive (list (yamlsql--find-table)))
@@ -154,4 +186,33 @@
                           ("field" . ,field))
                         'yamlsql--print-text))
    )
+  )
+
+
+
+;;; Convert YAML to SQLs
+
+(defun yamlsql-render-sql ()
+  (interactive)
+  (let ((content (buffer-string))
+        (lineno (line-number-at-pos)))
+    (yamlsql--http-post "/render_sql"
+                        `(("content" . ,content)
+                          ("lineno" . ,lineno))
+                        (lambda (status data)
+                          (yamlsql--output (assoc-default 'sql data)))
+                        ))
+  )
+
+(defun yamlsql-run-sql ()
+  (interactive)
+  (let ((content (buffer-string))
+        (lineno (line-number-at-pos)))
+    (yamlsql--http-post "/run_sql"
+                        `(("conn_id" . ,yamlsql-conn-id)
+                          ("content" . ,content)
+                          ("lineno" . ,lineno))
+                        (lambda (status data)
+                          (yamlsql--output (assoc-default 'text data)))
+                        ))
   )

@@ -23,7 +23,7 @@ def test_render_query_name(simple_render):
 
 def test_render_lineno(simple_render):
     sql1 = sql_format("select * from public.test_data")
-    sql2 = sql_format("select gender,age from public.test_data")
+    sql2 = sql_format("select gender,age from public.test_data limit 10")
     assert simple_render.render(lineno=1) == sql1
     assert simple_render.render(lineno=5) == sql2
 

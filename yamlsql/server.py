@@ -65,6 +65,7 @@ def render_sql(content, lineno=None):
 
 @app.route('/run_sql', methods=['POST'])
 @api_request
+@emacs_converter(emacs.run_sql)
 def run_sql(conn_id, content, lineno=None, limit=100):
     db = DBMeta.get_instance(conn_id)
     sql = SQLRender(content).render(lineno=lineno)

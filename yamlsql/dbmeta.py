@@ -149,7 +149,10 @@ class DBMeta(object):
             "rowcount": rs.rowcount
             }
         try:
-            result['rows'] = [dict(x) for x in rs.fetchmany(limit)]
+            rows = rs.fetchmany(limit)
+            if rows:
+                result['columns'] = rows[0].keys()
+                result['rows'] = [r.values() for r in rows]
         except ResourceClosedError:
             pass
         return result
